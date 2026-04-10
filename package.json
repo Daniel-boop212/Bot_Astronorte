@@ -1,0 +1,19 @@
+{
+  "name": "bot_astronorte",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Bot_Astronorte.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "fs-extra": "^11.3.4",
+    "node-cron": "^4.2.1",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.34.6"
+  }
+}
