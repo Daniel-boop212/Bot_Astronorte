@@ -4,6 +4,13 @@
  * ==========================================
  */
 
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+process.env.PUPPETEER_CACHE_DIR =
+  process.env.PUPPETEER_CACHE_DIR || path.join(__dirname, '.cache', 'puppeteer');
+
 const express = require('express');
 const {
   Client,
@@ -13,19 +20,13 @@ const {
 
 const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
-const fs = require('fs');
 const csv = require('csv-parser');
 const axios = require('axios');
 const translate = require('translate-google');
-const path = require('path');
-const { spawnSync } = require('child_process');
-
-process.env.PUPPETEER_CACHE_DIR =
-  process.env.PUPPETEER_CACHE_DIR || path.join(__dirname, '.cache', 'puppeteer');
 
 function resolverChrome() {
   try {
-    const executablePath =
+    const executablePath = buscarChromeInstalado() ||
       process.env.PUPPETEER_EXECUTABLE_PATH ||
       require('whatsapp-web.js/node_modules/puppeteer').executablePath();
 
@@ -62,15 +63,41 @@ function resolverChrome() {
       throw new Error(`No se pudo instalar Chrome. Codigo: ${install.status}`);
     }
 
-    if (!fs.existsSync(executablePath)) {
-      throw new Error(`Chrome se instalo, pero no aparece en: ${executablePath}`);
+    const installedPath = buscarChromeInstalado();
+    if (installedPath) {
+      console.log('Chrome instalado en:', installedPath);
+      return installedPath;
     }
 
-    return executablePath;
+    throw new Error(`Chrome se instalo, pero no aparece en: ${process.env.PUPPETEER_CACHE_DIR}`);
   } catch (error) {
     console.log('No se pudo resolver Chrome automaticamente:', error.message);
     return undefined;
   }
+}
+
+function buscarChromeInstalado(dir = process.env.PUPPETEER_CACHE_DIR) {
+  if (!dir || !fs.existsSync(dir)) return null;
+
+  for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, item.name);
+
+    if (item.isDirectory()) {
+      const found = buscarChromeInstalado(fullPath);
+      if (found) return found;
+      continue;
+    }
+
+    if (process.platform === 'win32' && item.name === 'chrome.exe') {
+      return fullPath;
+    }
+
+    if (process.platform !== 'win32' && item.name === 'chrome') {
+      return fullPath;
+    }
+  }
+
+  return null;
 }
 
 const chromeExecutablePath = resolverChrome();
