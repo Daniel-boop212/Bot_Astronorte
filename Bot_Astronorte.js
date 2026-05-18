@@ -159,11 +159,32 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
+client.on('loading_screen', (percent, message) => {
+  console.log(`Cargando WhatsApp: ${percent}% - ${message}`);
+});
+
+client.on('authenticated', () => {
+  console.log('WhatsApp autenticado correctamente');
+});
+
+client.on('auth_failure', message => {
+  console.log('Fallo de autenticacion de WhatsApp:', message);
+});
+
+client.on('change_state', state => {
+  console.log('Estado de WhatsApp:', state);
+});
+
+client.on('remote_session_saved', () => {
+  console.log('Sesion remota guardada');
+});
+
 // ==========================================
 // READY
 // ==========================================
 
 client.on('ready', () => {
+  console.log('Grupo junta configurado:', GRUPO_JUNTA);
   console.log('✅ BOT ASTRONORTE LISTO');
 });
 
@@ -297,6 +318,7 @@ client.on('message', async message => {
   const text = message.body.toLowerCase();
 
   if (text === 'ping') {
+    await client.sendMessage(GRUPO_JUNTA, 'ping: bot activo');
     return message.reply('🏓 activo');
   }
 
