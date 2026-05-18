@@ -4,7 +4,9 @@
   "main": "Bot_Astronorte.js",
   "scripts": {
     "start": "node Bot_Astronorte.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "build": "npm run install:chrome",
+    "install:chrome": "node ./node_modules/whatsapp-web.js/node_modules/puppeteer/lib/cjs/puppeteer/node/cli.js browsers install chrome",
+    "postinstall": "npm run install:chrome"
   },
   "dependencies": {
     "axios": "^1.7.2",

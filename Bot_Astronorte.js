@@ -18,6 +18,15 @@ const csv = require('csv-parser');
 const axios = require('axios');
 const translate = require('translate-google');
 
+let chromeExecutablePath;
+try {
+  chromeExecutablePath =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    require('whatsapp-web.js/node_modules/puppeteer').executablePath();
+} catch (error) {
+  console.log('No se pudo resolver Chrome automaticamente:', error.message);
+}
+
 // ==========================================
 // EXPRESS (IMPORTANTE PARA RENDER)
 // ==========================================
@@ -54,9 +63,13 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        executablePath: chromeExecutablePath,
         args: [
     '--no-sandbox',
-    '--disable-setuid-sandbox'
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-zygote'
 ]
     }
 });
