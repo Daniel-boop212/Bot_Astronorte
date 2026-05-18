@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node Bot_Astronorte.js",
     "build": "npm run install:chrome",
-    "install:chrome": "node ./node_modules/whatsapp-web.js/node_modules/puppeteer/lib/cjs/puppeteer/node/cli.js browsers install chrome",
+    "install:chrome": "node scripts/install-chrome.js",
     "postinstall": "npm run install:chrome"
   },
   "dependencies": {

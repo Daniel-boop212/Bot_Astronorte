@@ -17,15 +17,63 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const axios = require('axios');
 const translate = require('translate-google');
+const path = require('path');
+const { spawnSync } = require('child_process');
 
-let chromeExecutablePath;
-try {
-  chromeExecutablePath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    require('whatsapp-web.js/node_modules/puppeteer').executablePath();
-} catch (error) {
-  console.log('No se pudo resolver Chrome automaticamente:', error.message);
+process.env.PUPPETEER_CACHE_DIR =
+  process.env.PUPPETEER_CACHE_DIR || path.join(__dirname, '.cache', 'puppeteer');
+
+function resolverChrome() {
+  try {
+    const executablePath =
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      require('whatsapp-web.js/node_modules/puppeteer').executablePath();
+
+    if (fs.existsSync(executablePath)) return executablePath;
+
+    console.log('Chrome no existe en la ruta esperada. Instalando Chrome...');
+
+    const install = spawnSync(
+      process.execPath,
+      [
+        path.join(
+          __dirname,
+          'node_modules',
+          'whatsapp-web.js',
+          'node_modules',
+          'puppeteer',
+          'lib',
+          'cjs',
+          'puppeteer',
+          'node',
+          'cli.js'
+        ),
+        'browsers',
+        'install',
+        'chrome'
+      ],
+      {
+        stdio: 'inherit',
+        env: process.env
+      }
+    );
+
+    if (install.status !== 0) {
+      throw new Error(`No se pudo instalar Chrome. Codigo: ${install.status}`);
+    }
+
+    if (!fs.existsSync(executablePath)) {
+      throw new Error(`Chrome se instalo, pero no aparece en: ${executablePath}`);
+    }
+
+    return executablePath;
+  } catch (error) {
+    console.log('No se pudo resolver Chrome automaticamente:', error.message);
+    return undefined;
+  }
 }
+
+const chromeExecutablePath = resolverChrome();
 
 // ==========================================
 // EXPRESS (IMPORTANTE PARA RENDER)
