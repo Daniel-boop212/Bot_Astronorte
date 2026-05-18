@@ -1,9 +1,16 @@
 /**
- * BOT ASTRONORTE (CSV + NASA API + TRADUCCION)
- * Ejecutar: node Bot_Astronorte.js
+ * ==========================================
+ * BOT ASTRONORTE (RENDER READY)
+ * ==========================================
  */
 
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const express = require('express');
+const {
+  Client,
+  LocalAuth,
+  MessageMedia
+} = require('whatsapp-web.js');
+
 const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
 const fs = require('fs');
@@ -11,75 +18,130 @@ const csv = require('csv-parser');
 const axios = require('axios');
 const translate = require('translate-google');
 
-// CONFIG
-const CSV_FILE = 'Datos Cumples Astronorte.csv';
-const GRUPO_ID = "120363401185331944@g.us";
-const IMG_PATH = "./nasa.jpg";
-const NASA_API_KEY = "DEMO_KEY";
+// ==========================================
+// EXPRESS (IMPORTANTE PARA RENDER)
+// ==========================================
 
-// CLIENTE
-const client = new Client({
-  authStrategy: new LocalAuth()
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('🚀 Bot Astronorte activo');
 });
 
-client.on('qr', (qr) => {
-  console.log('\nEscanea el QR:\n');
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Servidor web listo');
+});
+
+// ==========================================
+// CONFIG
+// ==========================================
+
+const CSV_FILE = 'Datos Cumples Astronorte.csv';
+
+const GRUPO_ASTRONORTE = '120363403658710602@g.us';
+const GRUPO_JUNTA = '120363304101999775@g.us';
+
+const IMG_PATH = './nasa.jpg';
+const NASA_API_KEY = 'DEMO_KEY';
+
+const ADMIN = '57TU_NUMERO@c.us';
+
+// ==========================================
+// CLIENTE WHATSAPP
+// ==========================================
+
+const client = new Client({
+  authStrategy: new LocalAuth(),
+
+  puppeteer: {
+    headless: true,
+
+    executablePath:
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
+  }
+});
+
+// ==========================================
+// QR
+// ==========================================
+
+client.on('qr', qr => {
+  console.clear();
+  console.log('ESCANEA QR');
   qrcode.generate(qr, { small: true });
 });
 
+// ==========================================
+// READY
+// ==========================================
+
 client.on('ready', () => {
-  console.log('Bot conectado');
+  console.log('✅ BOT ASTRONORTE LISTO');
 });
 
+client.on('disconnected', async reason => {
+  console.log('⚠ WhatsApp desconectado:', reason);
+
+  setTimeout(() => {
+    client.initialize();
+  }, 5000);
+});
+
+process.on('unhandledRejection', err => {
+  console.log('ERROR NO MANEJADO:', err);
+});
+
+process.on('uncaughtException', err => {
+  console.log('EXCEPCION:', err);
+});
+// ==========================================
 // LEER CSV
+// ==========================================
+
 function leerCSV() {
   return new Promise((resolve, reject) => {
     const resultados = [];
 
     fs.createReadStream(CSV_FILE)
-      .pipe(csv({
-        separator: ';',
-        mapHeaders: ({ header }) => header.trim()
-      }))
-      .on('data', (row) => {
-        try {
-          if (!row["Nombre"] || !row["tele"] || !row["cumple"]) return;
+      .pipe(csv({ separator: ';' }))
+      .on('data', row => {
+        if (!row.Nombre || !row.tele || !row.cumple) return;
 
-          const fechaRaw = row["cumple"].split(" ")[0];
-          const [dia, mes] = fechaRaw.split("/");
+        const [dia, mes] = row.cumple.split(' ')[0].split('/');
 
-          let numero = row["tele"].trim();
-          if (!numero.startsWith("57")) numero = "57" + numero;
+        let numero = row.tele.trim();
+        if (!numero.startsWith('57')) numero = '57' + numero;
 
-          resultados.push({
-            nombre: row["Nombre"].trim(),
-            numero: numero,
-            fecha: `${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`
-          });
-
-        } catch (e) {
-          console.log("Error fila:", row);
-        }
+        resultados.push({
+          nombre: row.Nombre.trim(),
+          numero,
+          fecha: `${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`
+        });
       })
       .on('end', () => resolve(resultados))
       .on('error', reject);
   });
 }
 
-// NASA API CON TRADUCCION
-async function obtenerImagenNASA(reintentos = 3) {
+// ==========================================
+// NASA
+// ==========================================
+
+async function obtenerImagenNASA() {
   try {
     const url = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}`;
 
-    const response = await axios.get(url);
-    const data = response.data;
+    const res = await axios.get(url);
+    const data = res.data;
 
-    if (data.media_type !== "image") {
-      console.log("NASA devolvio video, no imagen");
-      return null;
-    }
-
-    console.log("Imagen NASA:", data.url);
+    if (data.media_type !== 'image') return null;
 
     const img = await axios.get(data.url, {
       responseType: 'arraybuffer'
@@ -87,102 +149,110 @@ async function obtenerImagenNASA(reintentos = 3) {
 
     fs.writeFileSync(IMG_PATH, img.data);
 
-    const tituloES = await translate(data.title, { to: 'es' });
-    const descripcionES = await translate(data.explanation, { to: 'es' });
-
     return {
-      titulo: tituloES,
-      descripcion: descripcionES
+      titulo: await translate(data.title, { to: 'es' }),
+      descripcion: await translate(data.explanation, { to: 'es' })
     };
 
-  } catch (error) {
-
-    if (reintentos > 0) {
-      console.log("Reintentando NASA...");
-      await new Promise(res => setTimeout(res, 2000));
-      return obtenerImagenNASA(reintentos - 1);
-    }
-
-    console.log("Error NASA final:", error.message);
+  } catch (e) {
+    console.log('ERROR NASA:', e.message);
     return null;
   }
 }
 
-// FUNCION PRINCIPAL
-async function revisarCumpleanos() {
-  const hoy = new Date();
-  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-  const dia = String(hoy.getDate()).padStart(2, '0');
-  const fechaHoy = `${mes}-${dia}`;
+// ==========================================
+// CUMPLEAÑOS
+// ==========================================
 
-  console.log(`Hoy: ${fechaHoy}`);
+async function revisarCumpleanos(grupoDestino) {
+  const hoy = new Date();
+
+  const fechaHoy =
+    `${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+
+  console.log('🎂 Revisando:', fechaHoy);
 
   const lista = await leerCSV();
-
-  const nasaData = await obtenerImagenNASA();
+  const nasa = await obtenerImagenNASA();
 
   for (const persona of lista) {
+    if (persona.fecha !== fechaHoy) continue;
 
-    // Para pruebas usar (true)
-    if (persona.fecha === fechaHoy) {
+    const id = persona.numero + '@c.us';
 
-      const numeroID = persona.numero + "@c.us";
+    let msg = `🚀 *ASTRONORTE* 🚀
 
-      try {
-        const existe = await client.isRegisteredUser(numeroID);
-        if (!existe) continue;
+🎂 Feliz cumpleaños ${persona.nombre}`;
 
-        let mensaje = `🚀✨ *ALERTA ASTRONORTE* ✨🚀
+    if (nasa) {
+      msg += `
 
-🌟 Hoy celebramos a @${persona.numero} 🌟  
-🎂 ¡Feliz cumpleaños *${persona.nombre}*!  
-
-🪐 ¡Muchos éxitos en este nuevo ciclo! 🚀`;
-
-        if (nasaData) {
-          mensaje += `
-
-🌌 *${nasaData.titulo}*
-
-📖 ${nasaData.descripcion.substring(0, 300)}...`;
-        }
-
-        if (nasaData && fs.existsSync(IMG_PATH)) {
-
-          const media = MessageMedia.fromFilePath(IMG_PATH);
-
-          await client.sendMessage(GRUPO_ID, media, {
-            caption: mensaje,
-            mentions: [numeroID]
-          });
-
-        } else {
-
-          await client.sendMessage(GRUPO_ID, mensaje, {
-            mentions: [numeroID]
-          });
-        }
-
-        console.log(`Enviado a ${persona.nombre}`);
-
-      } catch (e) {
-        console.log(`Error con ${persona.nombre}:`, e.message);
-      }
+🌌 ${nasa.titulo}
+📖 ${nasa.descripcion.slice(0, 250)}...`;
     }
+
+    if (nasa && fs.existsSync(IMG_PATH)) {
+      const media = MessageMedia.fromFilePath(IMG_PATH);
+
+      await client.sendMessage(grupoDestino, media, {
+        caption: msg,
+        mentions: [id]
+      });
+    } else {
+      await client.sendMessage(grupoDestino, msg, {
+        mentions: [id]
+      });
+    }
+
+    console.log('✔ Enviado a', persona.nombre);
   }
 }
 
-// CRON
+// ==========================================
+// COMANDOS
+// ==========================================
 
-cron.schedule('0 8 * * *', () => {
-  revisarCumpleanos();
+client.on('message', async message => {
+  const text = message.body.toLowerCase();
+
+  if (text === 'ping') {
+    return message.reply('🏓 activo');
+  }
+
+  if (text === 'idgrupo') {
+    const chat = await message.getChat();
+    return message.reply(chat.id._serialized);
+  }
+
+  if (text === 'probarcumple') {
+    return revisarCumpleanos(GRUPO_JUNTA);
+  }
+
+  if (text === 'enviarcumple') {
+    return revisarCumpleanos(GRUPO_ASTRONORTE);
+  }
+
+  if (text === 'comandos') {
+    return message.reply(`
+📌 ping
+📌 idgrupo
+📌 probarcumple
+📌 enviarcumple
+    `);
+  }
 });
 
-// PRUEBA (eliminar despues)
-cron.schedule('* * * * *', () => {
-  console.log('\nPrueba...');
-  revisarCumpleanos();
+// ==========================================
+// CRON (8 AM COLOMBIA = 13 UTC)
+// ==========================================
+
+cron.schedule('0 13 * * *', () => {
+  console.log('⏰ CRON ACTIVADO');
+  revisarCumpleanos(GRUPO_ASTRONORTE);
 });
 
-// INICIAR
+// ==========================================
+// START
+// ==========================================
+
 client.initialize();
