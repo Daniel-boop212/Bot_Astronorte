@@ -333,11 +333,22 @@ async function obtenerImagenNASA() {
 // CUMPLEAÑOS
 // ==========================================
 
-async function revisarCumpleanos(grupoDestino) {
-  const hoy = new Date();
+function fechaColombiaMMDD() {
+  const partes = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
 
-  const fechaHoy =
-    `${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  const mes = partes.find(parte => parte.type === 'month').value;
+  const dia = partes.find(parte => parte.type === 'day').value;
+
+  return `${mes}-${dia}`;
+}
+
+async function revisarCumpleanos(grupoDestino, opciones = {}) {
+  const fechaHoy = fechaColombiaMMDD();
+  let enviados = 0;
 
   console.log('🎂 Revisando:', fechaHoy);
 
@@ -374,7 +385,26 @@ async function revisarCumpleanos(grupoDestino) {
     }
 
     console.log('✔ Enviado a', persona.nombre);
+    enviados++;
   }
+
+  if (enviados === 0 && opciones.notificarSinCumples) {
+    await client.sendMessage(
+      grupoDestino,
+      `Prueba de cumpleanos ejecutada. No hay cumpleanos registrados para hoy (${fechaHoy}).`
+    );
+  }
+
+  console.log(`Revision terminada. Mensajes enviados: ${enviados}`);
+  return enviados;
+}
+
+function normalizarComando(texto) {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '');
 }
 
 // ==========================================
@@ -382,27 +412,39 @@ async function revisarCumpleanos(grupoDestino) {
 // ==========================================
 
 client.on('message', async message => {
-  const text = message.body.toLowerCase();
+  const comando = normalizarComando(message.body || '');
 
-  if (text === 'ping') {
+  console.log('Mensaje recibido:', {
+    from: message.from,
+    body: message.body,
+    comando
+  });
+
+  if (comando === 'ping') {
     await client.sendMessage(GRUPO_JUNTA, 'ping: bot activo');
     return message.reply('🏓 activo');
   }
 
-  if (text === 'idgrupo') {
+  if (comando === 'idgrupo') {
     const chat = await message.getChat();
     return message.reply(chat.id._serialized);
   }
 
-  if (text === 'probarcumple') {
-    return revisarCumpleanos(GRUPO_JUNTA);
+  if (comando.startsWith('probarcumple') || comando.startsWith('probarcumpleanos')) {
+    const enviados = await revisarCumpleanos(GRUPO_JUNTA, {
+      notificarSinCumples: true
+    });
+    return message.reply(`Prueba ejecutada en junta. Mensajes enviados: ${enviados}`);
   }
 
-  if (text === 'enviarcumple') {
-    return revisarCumpleanos(GRUPO_ASTRONORTE);
+  if (comando.startsWith('enviarcumple') || comando.startsWith('enviarcumpleanos')) {
+    const enviados = await revisarCumpleanos(GRUPO_ASTRONORTE, {
+      notificarSinCumples: true
+    });
+    return message.reply(`Envio ejecutado. Mensajes enviados: ${enviados}`);
   }
 
-  if (text === 'comandos') {
+  if (comando === 'comandos') {
     return message.reply(`
 📌 ping
 📌 idgrupo
