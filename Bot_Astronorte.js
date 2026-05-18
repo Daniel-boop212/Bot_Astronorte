@@ -18,7 +18,8 @@ const {
   MessageMedia
 } = require('whatsapp-web.js');
 
-const qrcode = require('qrcode-terminal');
+const qrcodeTerminal = require('qrcode-terminal');
+const qrcode = require('qrcode');
 const cron = require('node-cron');
 const csv = require('csv-parser');
 const axios = require('axios');
@@ -107,9 +108,37 @@ const chromeExecutablePath = resolverChrome();
 // ==========================================
 
 const app = express();
+let ultimoQr = null;
+let estadoWhatsapp = 'iniciando';
 
 app.get('/', (req, res) => {
   res.send('🚀 Bot Astronorte activo');
+});
+
+app.get('/qr', async (req, res) => {
+  if (!ultimoQr) {
+    res.send(`
+      <h1>QR no disponible</h1>
+      <p>Estado WhatsApp: <strong>${estadoWhatsapp}</strong></p>
+      <p>Si el bot ya esta listo, no necesita QR. Si no, espera unos segundos y recarga esta pagina.</p>
+      <script>setTimeout(() => location.reload(), 5000);</script>
+    `);
+    return;
+  }
+
+  const qrImage = await qrcode.toDataURL(ultimoQr, {
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    scale: 8
+  });
+
+  res.send(`
+    <h1>Escanea este QR con WhatsApp</h1>
+    <p>Estado WhatsApp: <strong>${estadoWhatsapp}</strong></p>
+    <img src="${qrImage}" alt="QR de WhatsApp" style="width: min(90vw, 420px); height: auto;" />
+    <p>El QR expira rapido. Si falla, recarga esta pagina.</p>
+    <script>setTimeout(() => location.reload(), 20000);</script>
+  `);
 });
 
 app.listen(process.env.PORT || 3000, () => {
@@ -135,18 +164,38 @@ const ADMIN = '57TU_NUMERO@c.us';
 // ==========================================
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        executablePath: chromeExecutablePath,
-        args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-zygote'
-]
-    }
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    headless: true,
+    executablePath: chromeExecutablePath,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-breakpad',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-default-apps',
+      '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
+      '--disable-hang-monitor',
+      '--disable-ipc-flooding-protection',
+      '--disable-notifications',
+      '--disable-popup-blocking',
+      '--disable-prompt-on-repost',
+      '--disable-renderer-backgrounding',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-first-run',
+      '--no-default-browser-check'
+    ]
+  }
 });
 
 // ==========================================
@@ -155,23 +204,31 @@ const client = new Client({
 
 client.on('qr', qr => {
   console.clear();
+  ultimoQr = qr;
+  estadoWhatsapp = 'esperando_qr';
   console.log('ESCANEA QR');
-  qrcode.generate(qr, { small: true });
+  console.log('Abre esta URL para escanearlo mejor: https://bot-astronorte.onrender.com/qr');
+  qrcodeTerminal.generate(qr, { small: true });
 });
 
 client.on('loading_screen', (percent, message) => {
+  estadoWhatsapp = `cargando ${percent}%`;
   console.log(`Cargando WhatsApp: ${percent}% - ${message}`);
 });
 
 client.on('authenticated', () => {
+  estadoWhatsapp = 'autenticado';
+  ultimoQr = null;
   console.log('WhatsApp autenticado correctamente');
 });
 
 client.on('auth_failure', message => {
+  estadoWhatsapp = 'fallo_autenticacion';
   console.log('Fallo de autenticacion de WhatsApp:', message);
 });
 
 client.on('change_state', state => {
+  estadoWhatsapp = state;
   console.log('Estado de WhatsApp:', state);
 });
 
@@ -184,11 +241,14 @@ client.on('remote_session_saved', () => {
 // ==========================================
 
 client.on('ready', () => {
+  estadoWhatsapp = 'listo';
+  ultimoQr = null;
   console.log('Grupo junta configurado:', GRUPO_JUNTA);
   console.log('✅ BOT ASTRONORTE LISTO');
 });
 
 client.on('disconnected', async reason => {
+  estadoWhatsapp = 'desconectado';
   console.log('⚠ WhatsApp desconectado:', reason);
 
   setTimeout(() => {
@@ -203,6 +263,13 @@ process.on('unhandledRejection', err => {
 process.on('uncaughtException', err => {
   console.log('EXCEPCION:', err);
 });
+
+setInterval(() => {
+  const memory = process.memoryUsage();
+  const rssMb = Math.round(memory.rss / 1024 / 1024);
+  const heapMb = Math.round(memory.heapUsed / 1024 / 1024);
+  console.log(`Memoria Node: RSS ${rssMb} MB | Heap ${heapMb} MB`);
+}, 60000);
 // ==========================================
 // LEER CSV
 // ==========================================
