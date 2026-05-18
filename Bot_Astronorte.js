@@ -49,15 +49,11 @@ const ADMIN = '57TU_NUMERO@c.us';
 // ==========================================
 // CLIENTE WHATSAPP
 // ==========================================
-
 const client = new Client({
   authStrategy: new LocalAuth(),
 
   puppeteer: {
     headless: true,
-
-    executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH,
 
     args: [
       '--no-sandbox',
